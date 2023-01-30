@@ -3374,6 +3374,9 @@ int r_jwe_decrypt_payload(jwe_t * jwe) {
         * It can't possibly be valid */
         y_log_message(Y_LOG_LEVEL_ERROR, "r_jwe_decrypt_payload - Invalid ciphertext length");
         ret = RHN_ERROR_INVALID;
+fprintf(stderr, "failing due to %s ciphertext_decoded_len=%zu cipher_block_size=%u\n",
+    gnutls_cipher_get_name(_r_get_alg_from_enc(jwe->enc)),
+    ciphertext_decoded_len,  cipher_block_size);
         return ret;
       }
     }
