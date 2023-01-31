@@ -3364,6 +3364,7 @@ int r_jwe_decrypt_payload(jwe_t * jwe) {
   int cipher_cbc;
   struct _o_datum dat = {0, NULL}, dat_ciph = {0, NULL}, dat_tag = {0, NULL};
 
+ fprintf(stderr, "r_jwe_decrypt_payload\n");
   if (jwe != NULL && jwe->enc != R_JWA_ENC_UNKNOWN && (ciphertext_b64_len = o_strlen((const char *)jwe->ciphertext_b64url)) != 0 && !o_strnullempty((const char *)jwe->iv_b64url) && jwe->key != NULL && jwe->key_len && jwe->key_len == _r_get_key_size(jwe->enc)) {
     /* ensure payload_enc_buflen is a multiple of cipher_block_size
      * if the cipher is a block-mode cipher
@@ -3382,11 +3383,15 @@ int r_jwe_decrypt_payload(jwe_t * jwe) {
         }
       } else {
         y_log_message(Y_LOG_LEVEL_ERROR, "r_jwe_decrypt_payload - Error o_base64url_decode ciphertext_b64url");
+          fprintf(stderr, "failing due to base64_dec %s ciphertext_decoded_len=%zu\n",
+              gnutls_cipher_get_name(_r_get_alg_from_enc(jwe->enc)),
+              ciphertext_decoded_len);
         ret = RHN_ERROR;
       }
     }
 
     if (ret == RHN_OK) {
+      fprintf(stderr, "ciphertext is ok\n");
       // Decode iv and payload_b64
       o_free(jwe->iv);
       if (o_base64url_decode_alloc(jwe->iv_b64url, o_strlen((const char *)jwe->iv_b64url), &dat)) {
