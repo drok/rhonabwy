@@ -963,7 +963,7 @@ int r_jwt_generate_enc_iv(jwt_t * jwt) {
   int ret;
 
   if (jwt != NULL && jwt->enc != R_JWA_ENC_UNKNOWN) {
-    jwt->iv_len = gnutls_cipher_get_iv_size(_r_get_alg_from_enc(jwt->enc));
+    jwt->iv_len = (unsigned)gnutls_cipher_get_iv_size(_r_get_alg_from_enc(jwt->enc));
     o_free(jwt->iv);
     jwt->iv = NULL;
     if (jwt->iv_len) {
@@ -1204,43 +1204,18 @@ int r_jwt_advanced_parse(jwt_t * jwt, const char * token, uint32_t parse_flags, 
 }
 
 int r_jwt_advanced_parsen(jwt_t * jwt, const char * token, size_t token_len, uint32_t parse_flags, int x5u_flags) {
-  size_t nb_dots = 0, i, payload_len = 0, token_dup_len = 0;
-  int ret, res;
+  size_t payload_len = 0;
+  int ret, res, token_type = R_JWT_TYPE_NONE;
   const unsigned char * payload = NULL;
-  char * payload_str = NULL, * token_dup = NULL, * tmp;
+  char * payload_str = NULL;
 
   if (jwt != NULL && token != NULL && token_len) {
     jwt->parse_flags = parse_flags;
-    token_dup = o_strndup(token, token_len);
-    // Remove whitespaces and newlines
-    tmp = str_replace(token_dup, " ", "");
-    o_free(token_dup);
-    token_dup = tmp;
-    tmp = str_replace(token_dup, "\n", "");
-    o_free(token_dup);
-    token_dup = tmp;
-    tmp = str_replace(token_dup, "\t", "");
-    o_free(token_dup);
-    token_dup = tmp;
-    tmp = str_replace(token_dup, "\v", "");
-    o_free(token_dup);
-    token_dup = tmp;
-    tmp = str_replace(token_dup, "\f", "");
-    o_free(token_dup);
-    token_dup = tmp;
-    tmp = str_replace(token_dup, "\r", "");
-    o_free(token_dup);
-    token_dup = tmp;
-    token_dup_len = o_strlen(token_dup);
-    for (i=0; i<token_dup_len; i++) {
-      if (token_dup[i] == '.') {
-        nb_dots++;
-      }
-    }
-    if (nb_dots == 2) { // JWS
+    token_type = r_jwt_token_typen(token, token_len);
+    if (R_JWT_TYPE_SIGN == token_type) { // JWS
       r_jws_free(jwt->jws);
       if ((r_jws_init(&jwt->jws)) == RHN_OK) {
-        if ((res = r_jws_advanced_compact_parsen(jwt->jws, token_dup, token_dup_len, parse_flags, x5u_flags)) == RHN_OK) {
+        if ((res = r_jws_advanced_compact_parsen(jwt->jws, token, token_len, parse_flags, x5u_flags)) == RHN_OK) {
           json_decref(jwt->j_header);
           jwt->j_header = json_deep_copy(jwt->jws->j_header);
           json_decref(jwt->j_claims);
@@ -1297,10 +1272,10 @@ int r_jwt_advanced_parsen(jwt_t * jwt, const char * token, size_t token_len, uin
         y_log_message(Y_LOG_LEVEL_ERROR, "r_jwt_parsen - Error r_jws_init");
         ret = RHN_ERROR;
       }
-    } else if (nb_dots == 4) { // JWE
+    } else if (R_JWT_TYPE_ENCRYPT == token_type) { // JWE
       r_jwe_free(jwt->jwe);
       if ((r_jwe_init(&jwt->jwe)) == RHN_OK) {
-        if ((res = r_jwe_advanced_compact_parsen(jwt->jwe, token_dup, token_dup_len, parse_flags, x5u_flags)) == RHN_OK) {
+        if ((res = r_jwe_advanced_compact_parsen(jwt->jwe, token, token_len, parse_flags, x5u_flags)) == RHN_OK) {
           json_decref(jwt->j_header);
           jwt->j_header = json_deep_copy(jwt->jwe->j_header);
           jwt->enc_alg = jwt->jwe->alg;
@@ -1327,7 +1302,6 @@ int r_jwt_advanced_parsen(jwt_t * jwt, const char * token, size_t token_len, uin
       y_log_message(Y_LOG_LEVEL_ERROR, "r_jwt_parsen - Error invalid token format");
       ret = RHN_ERROR_PARAM;
     }
-    o_free(token_dup);
   } else {
     y_log_message(Y_LOG_LEVEL_ERROR, "r_jwt_parsen - Error invalid input parameters");
     ret = RHN_ERROR_PARAM;
@@ -1718,7 +1692,7 @@ int r_jwt_verify_signature_nested(jwt_t * jwt, jwk_t * verify_key, int verify_ke
 
 int r_jwt_validate_claims(jwt_t * jwt, ...) {
   rhn_claim_opt option;
-  unsigned int ret = RHN_OK;
+  int ret = RHN_OK;
   int i_value;
   const char * str_key, * str_value;
   json_t * j_value, * j_expected_value;
@@ -1782,7 +1756,7 @@ int r_jwt_validate_claims(jwt_t * jwt, ...) {
           i_value = va_arg(vl, int);
           if (i_value == R_JWT_CLAIM_PRESENT && !json_is_integer(json_object_get(jwt->j_claims, "exp"))) {
             ret = RHN_ERROR_PARAM;
-          } else if (json_is_integer(json_object_get(jwt->j_claims, "exp"))) {
+          } else if (json_is_integer(json_object_get(jwt->j_claims, "exp")) && json_integer_value(json_object_get(jwt->j_claims, "exp")) > 0) {
             t_value = (time_t)r_jwt_get_claim_int_value(jwt, "exp");
             if (i_value == R_JWT_CLAIM_NOW) {
               if (t_value < now) {
@@ -1801,7 +1775,7 @@ int r_jwt_validate_claims(jwt_t * jwt, ...) {
           i_value = va_arg(vl, int);
           if (i_value == R_JWT_CLAIM_PRESENT && !json_is_integer(json_object_get(jwt->j_claims, "nbf"))) {
             ret = RHN_ERROR_PARAM;
-          } else if (json_is_integer(json_object_get(jwt->j_claims, "nbf"))) {
+          } else if (json_is_integer(json_object_get(jwt->j_claims, "nbf")) && json_integer_value(json_object_get(jwt->j_claims, "nbf")) > 0) {
             t_value = (time_t)r_jwt_get_claim_int_value(jwt, "nbf");
             if (i_value == R_JWT_CLAIM_NOW) {
               if (t_value > now) {
@@ -1820,7 +1794,7 @@ int r_jwt_validate_claims(jwt_t * jwt, ...) {
           i_value = va_arg(vl, int);
           if (i_value == R_JWT_CLAIM_PRESENT && !json_is_integer(json_object_get(jwt->j_claims, "iat"))) {
             ret = RHN_ERROR_PARAM;
-          } else if (json_is_integer(json_object_get(jwt->j_claims, "iat"))) {
+          } else if (json_is_integer(json_object_get(jwt->j_claims, "iat")) && json_integer_value(json_object_get(jwt->j_claims, "iat")) > 0) {
             t_value = (time_t)r_jwt_get_claim_int_value(jwt, "iat");
             if (i_value == R_JWT_CLAIM_NOW) {
               if (t_value > now) {
@@ -1900,7 +1874,7 @@ int r_jwt_validate_claims(jwt_t * jwt, ...) {
 
 int r_jwt_set_claims(jwt_t * jwt, ...) {
   rhn_claim_opt option;
-  unsigned int ret = RHN_OK;
+  int ret = RHN_OK;
   int i_value;
   const char * str_key, * str_value;
   json_t * j_value;
@@ -2199,7 +2173,7 @@ int r_jwt_set_properties(jwt_t * jwt, ...) {
           ui_value = va_arg(vl, unsigned int);
           ustr_value = va_arg(vl, const unsigned char *);
           size_value = va_arg(vl, size_t);
-          ret = r_jwt_add_enc_keys_pem_der(jwt, ui_value, NULL, 0, ustr_value, size_value);
+          ret = r_jwt_add_enc_keys_pem_der(jwt, (int)ui_value, NULL, 0, ustr_value, size_value);
           break;
         case RHN_OPT_DECRYPT_KEY_JWK:
           jwk = va_arg(vl, jwk_t *);
@@ -2225,7 +2199,7 @@ int r_jwt_set_properties(jwt_t * jwt, ...) {
           ui_value = va_arg(vl, unsigned int);
           ustr_value = va_arg(vl, const unsigned char *);
           size_value = va_arg(vl, size_t);
-          ret = r_jwt_add_enc_keys_pem_der(jwt, ui_value, ustr_value, size_value, NULL, 0);
+          ret = r_jwt_add_enc_keys_pem_der(jwt, (int)ui_value, ustr_value, size_value, NULL, 0);
           break;
         case RHN_OPT_VERIFY_KEY_JWK:
           jwk = va_arg(vl, jwk_t *);
@@ -2251,7 +2225,7 @@ int r_jwt_set_properties(jwt_t * jwt, ...) {
           ui_value = va_arg(vl, unsigned int);
           ustr_value = va_arg(vl, const unsigned char *);
           size_value = va_arg(vl, size_t);
-          ret = r_jwt_add_sign_keys_pem_der(jwt, ui_value, NULL, 0, ustr_value, size_value);
+          ret = r_jwt_add_sign_keys_pem_der(jwt, (int)ui_value, NULL, 0, ustr_value, size_value);
           break;
         case RHN_OPT_SIGN_KEY_JWK:
           jwk = va_arg(vl, jwk_t *);
@@ -2277,7 +2251,7 @@ int r_jwt_set_properties(jwt_t * jwt, ...) {
           ui_value = va_arg(vl, unsigned int);
           ustr_value = va_arg(vl, const unsigned char *);
           size_value = va_arg(vl, size_t);
-          ret = r_jwt_add_sign_keys_pem_der(jwt, ui_value, ustr_value, size_value, NULL, 0);
+          ret = r_jwt_add_sign_keys_pem_der(jwt, (int)ui_value, ustr_value, size_value, NULL, 0);
           break;
         default:
           ret = RHN_ERROR_PARAM;
@@ -2297,34 +2271,12 @@ int r_jwt_token_type(const char * token) {
 }
 
 int r_jwt_token_typen(const char * token, size_t token_len) {
-  size_t nb_dots = 0, i, token_dup_len = 0;
+  size_t nb_dots = 0, i;
   int ret = R_JWT_TYPE_NONE;
-  char * token_dup = NULL, * tmp;
 
   if (token != NULL && token_len) {
-    token_dup = o_strndup(token, token_len);
-    // Remove whitespaces and newlines
-    tmp = str_replace(token_dup, " ", "");
-    o_free(token_dup);
-    token_dup = tmp;
-    tmp = str_replace(token_dup, "\n", "");
-    o_free(token_dup);
-    token_dup = tmp;
-    tmp = str_replace(token_dup, "\t", "");
-    o_free(token_dup);
-    token_dup = tmp;
-    tmp = str_replace(token_dup, "\v", "");
-    o_free(token_dup);
-    token_dup = tmp;
-    tmp = str_replace(token_dup, "\f", "");
-    o_free(token_dup);
-    token_dup = tmp;
-    tmp = str_replace(token_dup, "\r", "");
-    o_free(token_dup);
-    token_dup = tmp;
-    token_dup_len = o_strlen(token_dup);
-    for (i=0; i<token_dup_len; i++) {
-      if (token_dup[i] == '.') {
+    for (i=0; i<token_len; i++) {
+      if (token[i] == '.') {
         nb_dots++;
       }
     }
@@ -2333,7 +2285,6 @@ int r_jwt_token_typen(const char * token, size_t token_len) {
     } else if (nb_dots == 4) {
       ret = R_JWT_TYPE_ENCRYPT;
     }
-    o_free(token_dup);
   }
   return ret;
 }

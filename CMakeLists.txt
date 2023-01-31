@@ -30,10 +30,10 @@ set(PROJECT_HOMEPAGE_URL "https://github.com/babelouest/rhonabwy/")
 set(PROJECT_BUGREPORT_PATH "https://github.com/babelouest/rhonabwy/issues")
 set(LIBRARY_VERSION_MAJOR "1")
 set(LIBRARY_VERSION_MINOR "1")
-set(LIBRARY_VERSION_PATCH "5")
-set(ORCANIA_VERSION_REQUIRED "2.2.2")
-set(YDER_VERSION_REQUIRED "1.4.15")
-set(ULFIUS_VERSION_REQUIRED "2.7.9")
+set(LIBRARY_VERSION_PATCH "10")
+set(ORCANIA_VERSION_REQUIRED "2.3.2")
+set(YDER_VERSION_REQUIRED "1.4.19")
+set(ULFIUS_VERSION_REQUIRED "2.7.12")
 
 set(PROJECT_VERSION "${LIBRARY_VERSION_MAJOR}.${LIBRARY_VERSION_MINOR}.${LIBRARY_VERSION_PATCH}")
 set(PROJECT_VERSION_MAJOR ${LIBRARY_VERSION_MAJOR})
@@ -62,7 +62,8 @@ set(LIBRARY_SOVERSION "${LIBRARY_VERSION_MAJOR}.${LIBRARY_VERSION_MINOR}")
 
 # cmake modules
 
-set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake-modules)
+set(R_CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake-modules)
+list(APPEND CMAKE_MODULE_PATH "${R_CMAKE_MODULE_PATH}")
 
 include(GNUInstallDirs)
 include(CheckSymbolExists)
@@ -166,7 +167,7 @@ endif ()
 
 add_library(rhonabwy SHARED ${LIB_SRC})
 set_target_properties(rhonabwy PROPERTIES
-        COMPILE_OPTIONS -Wextra
+        COMPILE_OPTIONS "-Wextra;-Wconversion"
         PUBLIC_HEADER "${INC_DIR}/rhonabwy.h;${PROJECT_BINARY_DIR}/rhonabwy-cfg.h"
         VERSION "${LIBRARY_VERSION}"
         SOVERSION "${LIBRARY_SOVERSION}")
@@ -183,26 +184,31 @@ if (SEARCH_ORCANIA_R)
     set(Orcania_FIND_QUIETLY ON) # force to find Orcania quietly
     include(FindOrcania)
     find_package(Orcania ${ORCANIA_VERSION_REQUIRED} QUIET) # try to find orcania
-    if (ORCANIA_FOUND)
-        include_directories(${ORCANIA_INCLUDE_DIRS})
-    else ()
-      if (DOWNLOAD_DEPENDENCIES)
-          include(DownloadProject)
-          message(STATUS "Download Orcania ${ORCANIA_VERSION_REQUIRED}")
-          download_project(PROJ orcania # ... otherwise, download archive
-              URL "https://github.com/babelouest/orcania/archive/v${ORCANIA_VERSION_REQUIRED}.tar.gz"
-              QUIET)
-          add_subdirectory(${orcania_SOURCE_DIR} ${orcania_BINARY_DIR})
-          include_directories(${orcania_SOURCE_DIR}/include)
-          add_dependencies(rhonabwy orcania)
-          set(ORCANIA_LIBRARIES orcania)
-          include_directories(${orcania_BINARY_DIR})
+    if (NOT ORCANIA_FOUND)
+        if (DOWNLOAD_DEPENDENCIES)
+            include(DownloadProject)
+            download_project(PROJ orcania # ... otherwise, download archive
+                             URL "https://github.com/babelouest/orcania/archive/v${ORCANIA_VERSION_REQUIRED}.tar.gz"
+                             QUIET)
+            add_subdirectory(${orcania_SOURCE_DIR} ${orcania_BINARY_DIR})
+            include_directories(${orcania_SOURCE_DIR}/include)
+            include_directories(${orcania_BINARY_DIR})
+            add_dependencies(yder orcania)
+            set(ORCANIA_LIBRARIES orcania)
+            set(LIBS ${LIBS} ${ORCANIA_LIBRARIES})
         else ()
             message( FATAL_ERROR "Orcania not found")
         endif ()
+    else()
+        if ("${ORCANIA_VERSION_STRING}" VERSION_GREATER_EQUAL "${ORCANIA_VERSION_REQUIRED}")
+            message(STATUS "Orcania found: ${ORCANIA_VERSION_STRING}")
+            set(LIBS ${LIBS} ${ORCANIA_LIBRARIES})
+            include_directories(${ORCANIA_INCLUDE_DIRS})
+            include_directories(${orcania_BINARY_DIR})
+        else ()
+            message( FATAL_ERROR "Orcania version required: ${ORCANIA_VERSION_REQUIRED} - version installed: ${ORCANIA_VERSION_STRING}")
+        endif ()
     endif ()
-    target_link_libraries(rhonabwy ${ORCANIA_LIBRARIES})
-    set(LIBS ${LIBS} ${ORCANIA_LIBRARIES})
 else ()
     set(LIBS ${LIBS} orcania)
 endif ()
@@ -212,28 +218,31 @@ if (SEARCH_YDER_R)
     set(Yder_FIND_QUIETLY ON) # force to find Yder quietly
     include(FindYder)
     find_package(Yder ${YDER_VERSION_REQUIRED} QUIET) # try to find Yder
-    if (YDER_FOUND)
-        include_directories(${YDER_INCLUDE_DIRS})
-    else ()
-      if (DOWNLOAD_DEPENDENCIES)
-          include(DownloadProject)
-          message(STATUS "Download Yder ${YDER_VERSION_REQUIRED}")
-          option(CHECK_ORCANIA "specific param" off)
-          download_project(PROJ yder # ... otherwise, download archive
-              URL "https://github.com/babelouest/yder/archive/v${YDER_VERSION_REQUIRED}.tar.gz"
-              QUIET)
-          add_subdirectory(${yder_SOURCE_DIR} ${yder_BINARY_DIR})
-          include_directories(${yder_SOURCE_DIR}/include)
-          include_directories(${orcania_SOURCE_DIR}/include)
-          add_dependencies(rhonabwy yder)
-          set(YDER_LIBRARIES yder)
-          include_directories(${yder_BINARY_DIR})
+    if (NOT YDER_FOUND)
+        if (DOWNLOAD_DEPENDENCIES)
+            include(DownloadProject)
+            download_project(PROJ yder # ... otherwise, download archive
+                              URL "https://github.com/babelouest/yder/archive/v${YDER_VERSION_REQUIRED}.tar.gz"
+                              QUIET)
+            add_subdirectory(${yder_SOURCE_DIR} ${yder_BINARY_DIR})
+            include_directories(${yder_SOURCE_DIR}/include)
+            add_dependencies(ulfius yder)
+            set(YDER_LIBRARIES yder orcania)
+            include_directories(${yder_BINARY_DIR})
         else ()
             message( FATAL_ERROR "Yder not found")
         endif ()
+    else()
+        if ("${YDER_VERSION_STRING}" VERSION_GREATER_EQUAL "${YDER_VERSION_REQUIRED}")
+            message(STATUS "Yder found: ${YDER_VERSION_STRING}")
+            set(LIBS ${LIBS} ${YDER_LIBRARIES})
+            include_directories(${YDER_INCLUDE_DIRS})
+            include_directories(${yder_BINARY_DIR})
+        else ()
+            message( FATAL_ERROR "Yder version required: ${YDER_VERSION_REQUIRED} - version installed: ${YDER_VERSION_STRING}")
+        endif ()
     endif ()
-    target_link_libraries(rhonabwy ${YDER_LIBRARIES})
-    set(LIBS ${LIBS} ${YDER_LIBRARIES})
+    target_link_libraries(rhonabwy ${LIBS} ${YDER_LIBRARIES})
 else ()
     set(LIBS ${LIBS} yder)
 endif ()
@@ -244,7 +253,7 @@ option(BUILD_RNBYC "Build rnbyc application." ON)
 
 if (BUILD_RNBYC)
     add_executable(rnbyc ${RNBYC_DIR}/rnbyc.c ${INC_DIR}/rhonabwy.h ${PROJECT_BINARY_DIR}/rhonabwy-cfg.h)
-    set_target_properties(rnbyc PROPERTIES SKIP_BUILD_RPATH TRUE)
+    set_target_properties(rnbyc PROPERTIES SKIP_BUILD_RPATH TRUE COMPILE_OPTIONS "-Wextra;-Wconversion")
     add_dependencies(rnbyc rhonabwy)
     target_link_libraries(rnbyc rhonabwy ${LIBS})
     install(TARGETS rnbyc RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -288,20 +297,33 @@ if (BUILD_RHONABWY_TESTING)
     include(FindUlfius)
     find_package(Ulfius ${ULFIUS_VERSION_REQUIRED} QUIET)
     if (NOT ULFIUS_FOUND)
-        include(DownloadProject)
-        option(CHECK_ORCANIA "specific param" off)
-        option(CHECK_YDER "specific param" off)
-        message(STATUS "Download Ulfius ${ULFIUS_VERSION_REQUIRED}")
-        download_project(PROJ ulfius
-                URL "https://github.com/babelouest/ulfius/archive/v${ULFIUS_VERSION_REQUIRED}.tar.gz"
-                QUIET)
-        add_subdirectory(${ulfius_SOURCE_DIR} ${ulfius_BINARY_DIR})
-        include_directories(${yder_SOURCE_DIR}/include)
-        include_directories(${orcania_SOURCE_DIR}/include)
-        include_directories(${ulfius_SOURCE_DIR}/include)
-        add_dependencies(rhonabwy ulfius)
-        set(ULFIUS_LIBRARIES ulfius)
-        include_directories(${ulfius_BINARY_DIR})
+        if (DOWNLOAD_DEPENDENCIES)
+            include(DownloadProject)
+            option(CHECK_ORCANIA "specific param" off)
+            option(CHECK_YDER "specific param" off)
+            message(STATUS "Download Ulfius ${ULFIUS_VERSION_REQUIRED}")
+            download_project(PROJ ulfius
+                             URL "https://github.com/babelouest/ulfius/archive/v${ULFIUS_VERSION_REQUIRED}.tar.gz"
+                             QUIET)
+            add_subdirectory(${ulfius_SOURCE_DIR} ${ulfius_BINARY_DIR})
+            include_directories(${yder_SOURCE_DIR}/include)
+            include_directories(${orcania_SOURCE_DIR}/include)
+            include_directories(${ulfius_SOURCE_DIR}/include)
+            add_dependencies(rhonabwy ulfius)
+            set(ULFIUS_LIBRARIES ulfius)
+            include_directories(${ulfius_BINARY_DIR})
+        else ()
+            message( FATAL_ERROR "Ulfius not found")
+        endif ()
+    else ()
+        if ("${ULFIUS_VERSION_STRING}" VERSION_GREATER_EQUAL "${ULFIUS_VERSION_REQUIRED}")
+            message(STATUS "Ulfius found: ${ULFIUS_VERSION_STRING}")
+            set(LIBS ${LIBS} ${ULFIUS_LIBRARIES})
+            include_directories(${ULFIUS_INCLUDE_DIRS})
+            include_directories(${yder_BINARY_DIR})
+        else ()
+            message( FATAL_ERROR "Ulfius version required: ${ULFIUS_VERSION_REQUIRED} - version installed: ${ULFIUS_VERSION_STRING}")
+        endif ()
     endif ()
     target_link_libraries(rhonabwy ${ULFIUS_LIBRARIES})
 
@@ -348,7 +370,7 @@ if (BUILD_RHONABWY_TESTING)
         )
 
         configure_file(
-                "${CMAKE_MODULE_PATH}/CTestCustom.cmake.in"
+                "${R_CMAKE_MODULE_PATH}/CTestCustom.cmake.in"
                 "${CMAKE_CURRENT_BINARY_DIR}/CTestCustom.cmake"
                 @ONLY)
 
@@ -366,6 +388,18 @@ endif ()
 # install target
 
 option(INSTALL_HEADER "Install the header files" ON) # Install rhonabwy.h or not
+
+if(IS_ABSOLUTE "${CMAKE_INSTALL_INCLUDEDIR}")
+  set(PKGCONFIG_TARGET_INCLUDES "${CMAKE_INSTALL_INCLUDEDIR}")
+else()
+  set(PKGCONFIG_TARGET_INCLUDES "\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}")
+endif()
+
+if(IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
+  set(PKGCONFIG_TARGET_LIBDIR "${CMAKE_INSTALL_LIBDIR}")
+else()
+  set(PKGCONFIG_TARGET_LIBDIR "\${prefix}/${CMAKE_INSTALL_LIBDIR}")
+endif()
 
 configure_file(librhonabwy.pc.in librhonabwy.pc @ONLY)
 
@@ -391,7 +425,7 @@ endif ()
 
 if (NOT TARGET uninstall)
     configure_file(
-            "${CMAKE_MODULE_PATH}/CMakeUninstall.cmake.in"
+            "${R_CMAKE_MODULE_PATH}/CMakeUninstall.cmake.in"
             "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
             IMMEDIATE @ONLY)
     add_custom_target(uninstall

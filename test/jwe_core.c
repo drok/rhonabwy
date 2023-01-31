@@ -277,6 +277,9 @@ const char advanced_jku_4[] = "{\"keys\":[{\"kty\":\"EC\",\"x\":\"rXNalVG5Ylar4c
 #define TOKEN_EMPTY_IV "eyJhbGciOiJBMTI4S1ciLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0.S7OUaa-1ekDy8cPPo1Rzq81vwaEfk3yBL5Xw9FnfRtGikBSwH0OC6Q..BuhbHPZczZ_XqNm8JwoW_B8rczVdVYO4o7pflVAcT0ojJg_m8Eo79F2W7FgLUEKVxrOoOz6-tuQjCzWfZkrE3g.p28K0cxZ3gDEpAMD_79pOw"
 #define TOKEN_EMPTY_CIPHERTEXT "eyJhbGciOiJBMTI4S1ciLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0.S7OUaa-1ekDy8cPPo1Rzq81vwaEfk3yBL5Xw9FnfRtGikBSwH0OC6Q.29q9_PdnK2jXwG4gJvgDoQ..p28K0cxZ3gDEpAMD_79pOw"
 #define TOKEN_EMPTY_TAG "eyJhbGciOiJBMTI4S1ciLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0.S7OUaa-1ekDy8cPPo1Rzq81vwaEfk3yBL5Xw9FnfRtGikBSwH0OC6Q.29q9_PdnK2jXwG4gJvgDoQ.BuhbHPZczZ_XqNm8JwoW_B8rczVdVYO4o7pflVAcT0ojJg_m8Eo79F2W7FgLUEKVxrOoOz6-tuQjCzWfZkrE3g."
+#define TOKEN_OVERSIZE_IV "eyJhbGciOiJBMTI4S1ciLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0.ZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yCg.29q9_PdnK2jXwG4gJvgDoQ.BuhbHPZczZ_XqNm8JwoW_B8rczVdVYO4o7pflVAcT0ojJg_m8Eo79F2W7FgLUEKVxrOoOz6-tuQjCzWfZkrE3g.p28K0cxZ3gDEpAMD_79pOw"
+#define TOKEN_OVERSIZE_TAG "eyJhbGciOiJBMTI4S1ciLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0.S7OUaa-1ekDy8cPPo1Rzq81vwaEfk3yBL5Xw9FnfRtGikBSwH0OC6Q.29q9_PdnK2jXwG4gJvgDoQ.BuhbHPZczZ_XqNm8JwoW_B8rczVdVYO4o7pflVAcT0ojJg_m8Eo79F2W7FgLUEKVxrOoOz6-tuQjCzWfZkrE3g.ZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yZXJyb3JlcnJvcmVycm9yCg"
+#define TOKEN_INVALID_ENC "eyJhbGciOiJBMTI4S1ciLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIn0.S7OUaa-1ekDy8cPPo1Rzq81vwaEfk3yBL5Xw9FnfRtGikBSwH0OC6Q.29q9_PdnK2jXwG4gJvgDoQ.BuhbHPZczZ_XqNm8JwoW_B8rczVdVYO4o7pflVAcT0ojJg_m8Eo79F2W7FgLUEKVxrOoOz6-tuQjCzWfZkrE3g.p28K0cxZ3gDEpAMD_79pOw"
 
 START_TEST(test_rhonabwy_init)
 {
@@ -1082,7 +1085,7 @@ START_TEST(test_rhonabwy_decrypt_key_invalid_encrypted_key)
   ck_assert_int_eq(o_strlen((const char *)jwe->encrypted_key_b64url), 0);
   ck_assert_int_eq(r_jwe_encrypt_key(jwe, jwk_pubkey_rsa, 0), RHN_OK);
   ck_assert_int_gt(o_strlen((const char *)jwe->encrypted_key_b64url), 0);
-  ck_assert_int_eq(r_jwe_decrypt_key(jwe, jwk_pubkey_rsa, 0), RHN_ERROR_PARAM);
+  ck_assert_int_eq(r_jwe_decrypt_key(jwe, jwk_pubkey_rsa, 0), RHN_ERROR_INVALID);
   if (jwe->encrypted_key_b64url[2] == 'a') {
     jwe->encrypted_key_b64url[2] = 'e';
   } else {
@@ -1363,6 +1366,7 @@ START_TEST(test_rhonabwy_quick_parse)
 {
   jwk_t * jwk_pub;
   jwe_t * jwe;
+  jwk_t * jwk;
   struct _u_instance instance;
   char * http_key, * http_cert;
   
@@ -1380,6 +1384,20 @@ START_TEST(test_rhonabwy_quick_parse)
 
   ck_assert_ptr_ne(NULL, jwe = r_jwe_quick_parse(TOKEN, R_PARSE_NONE, R_FLAG_IGNORE_SERVER_CERTIFICATE));
   r_jwe_free(jwe);
+
+  ck_assert_ptr_ne(NULL, jwk = r_jwk_quick_import(R_IMPORT_JSON_STR, jwk_key_symmetric_str));
+  ck_assert_ptr_ne(NULL, jwe = r_jwe_quick_parse(TOKEN_OVERSIZE_IV, R_PARSE_NONE, R_FLAG_IGNORE_SERVER_CERTIFICATE));
+  ck_assert_int_eq(r_jwe_decrypt(jwe, jwk, 0), RHN_ERROR_INVALID);
+  r_jwe_free(jwe);
+
+  ck_assert_ptr_ne(NULL, jwe = r_jwe_quick_parse(TOKEN_OVERSIZE_TAG, R_PARSE_NONE, R_FLAG_IGNORE_SERVER_CERTIFICATE));
+  ck_assert_int_eq(r_jwe_decrypt(jwe, jwk, 0), RHN_ERROR_INVALID);
+  r_jwe_free(jwe);
+
+  ck_assert_ptr_ne(NULL, jwe = r_jwe_quick_parse(TOKEN_INVALID_ENC, R_PARSE_NONE, R_FLAG_IGNORE_SERVER_CERTIFICATE));
+  ck_assert_int_eq(r_jwe_decrypt(jwe, jwk, 0), RHN_ERROR_INVALID);
+  r_jwe_free(jwe);
+  r_jwk_free(jwk);
 
   ck_assert_ptr_eq(NULL, jwe = r_jwe_quick_parse(TOKEN_INVALID_HEADER, R_PARSE_NONE, R_FLAG_IGNORE_SERVER_CERTIFICATE));
   ck_assert_ptr_eq(NULL, jwe = r_jwe_quick_parse(TOKEN_INVALID_HEADER_B64, R_PARSE_NONE, R_FLAG_IGNORE_SERVER_CERTIFICATE));

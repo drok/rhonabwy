@@ -1,5 +1,33 @@
 # Rhonabwy Changelog
 
+## 1.1.10
+
+- Build with flag `-Wconversion`
+- Small refactor
+
+## 1.1.9
+
+- Minor bugfixes
+- Add test cases
+
+## 1.1.8
+
+- Fix build for 32 bits architectures
+- Remove EC P-521 support for JWE ECDH-ES key management
+
+## 1.1.7
+
+- Do not ignore whitespaces when parsing tokens
+- Enforce key verification
+- Security: Fix RSA-OAEP decryption key length check ([CVE-2022-38493](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-38493))
+- Add examples
+
+## 1.1.6
+
+- Fix pkg-config file with absolute path for `CMAKE_INSTALL_{INCLUDE,LIB}DIR`
+- Fix `CMAKE_MODULE_PATH` who was used as single value
+- Security: Fix possible buffer overflow on Key unwrapping with JWE AES GCM ([CVE-2022-32096](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-32096))
+
 ## 1.1.5
 
 - Improve jws and jwe parsing

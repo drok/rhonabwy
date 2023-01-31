@@ -48,7 +48,7 @@
 #include <yder.h>
 #include <rhonabwy.h>
 
-#define _RNBYC_VERSION_ "1.1.5"
+#define _RNBYC_VERSION_ "1.1.7"
 
 #define R_RSA_DEFAULT_SIZE 4096
 #define R_OCT_DEFAULT_SIZE 128
@@ -169,7 +169,7 @@ static char * get_file_content(const char * file_path) {
   f = fopen (file_path, "rb");
   if (f) {
     fseek (f, 0, SEEK_END);
-    length = ftell (f);
+    length = (size_t)ftell (f);
     fseek (f, 0, SEEK_SET);
     buffer = o_malloc((length+1)*sizeof(char));
     if (buffer) {
@@ -193,9 +193,9 @@ static char * get_stdin_content() {
   char * out = NULL, buffer[size];
   ssize_t length = 0, read_length;
 
-  while ((read_length = read(0, buffer, size)) > 0) {
-    out = o_realloc(out, length+read_length+1);
-    memcpy(out+length, buffer, read_length);
+  while ((read_length = read(0, buffer, (size_t)size)) > 0) {
+    out = o_realloc(out, (size_t)(length+read_length+1));
+    memcpy(out+length, buffer, (size_t)read_length);
     length += read_length;
     out[length] = '\0';
   }
@@ -212,7 +212,7 @@ static int jwk_generate(jwks_t * jwks_privkey, jwks_t * jwks_pubkey, json_t * j_
 
   if (r_jwk_init(&jwk_priv) == RHN_OK && r_jwk_init(&jwk_pub) == RHN_OK) {
     if (0 == o_strcmp("RSA", type)) {
-      r_jwk_generate_key_pair(jwk_priv, jwk_pub, R_KEY_TYPE_RSA, json_integer_value(json_object_get(j_element, "bits")), json_string_value(json_object_get(j_element, "kid")));
+      r_jwk_generate_key_pair(jwk_priv, jwk_pub, R_KEY_TYPE_RSA, (unsigned int)json_integer_value(json_object_get(j_element, "bits")), json_string_value(json_object_get(j_element, "kid")));
       if (json_string_length(json_object_get(j_element, "alg"))) {
         r_jwk_set_property_str(jwk_priv, "alg", json_string_value(json_object_get(j_element, "alg")));
         r_jwk_set_property_str(jwk_pub, "alg", json_string_value(json_object_get(j_element, "alg")));
@@ -335,9 +335,9 @@ static int jwk_generate(jwks_t * jwks_privkey, jwks_t * jwks_pubkey, json_t * j_
     } else if (0 == o_strcasecmp("oct", type)) {
       bits = json_integer_value(json_object_get(j_element, "bits"));
       bits += (bits%8);
-      oct = o_malloc(bits/8);
-      gnutls_rnd(GNUTLS_RND_KEY, oct, bits/8);
-      r_jwk_import_from_symmetric_key(jwk_priv, oct, bits/8);
+      oct = o_malloc((size_t)bits/8);
+      gnutls_rnd(GNUTLS_RND_KEY, oct, (size_t)bits/8);
+      r_jwk_import_from_symmetric_key(jwk_priv, oct, (size_t)bits/8);
       if (json_string_length(json_object_get(j_element, "alg"))) {
         r_jwk_set_property_str(jwk_priv, "alg", json_string_value(json_object_get(j_element, "alg")));
         r_jwk_set_property_str(jwk_pub, "alg", json_string_value(json_object_get(j_element, "alg")));
@@ -491,7 +491,7 @@ static void get_jwks_out(json_t * j_arguments, int split_keys, int x5u_flags, in
   if (r_jwks_size(jwks_privkey)) {
     if (format == RNBYC_FORMAT_JWK) {
       j_jwks = r_jwks_export_to_json_t(jwks_privkey);
-      str_jwks = json_dumps(j_jwks, JSON_INDENT(indent)|JSON_SORT_KEYS);
+      str_jwks = json_dumps(j_jwks, (size_t)(JSON_INDENT(indent)|JSON_SORT_KEYS));
       str_jwks_len = o_strlen(str_jwks);
     } else {
       str_jwks = NULL;
@@ -538,7 +538,7 @@ static void get_jwks_out(json_t * j_arguments, int split_keys, int x5u_flags, in
   if (r_jwks_size(jwks_pubkey)) {
     if (format == RNBYC_FORMAT_JWK) {
       j_jwks = r_jwks_export_to_json_t(jwks_pubkey);
-      str_jwks = json_dumps(j_jwks, JSON_INDENT(indent)|JSON_SORT_KEYS);
+      str_jwks = json_dumps(j_jwks, (size_t)(JSON_INDENT(indent)|JSON_SORT_KEYS));
       str_jwks_len = o_strlen(str_jwks);
     } else {
       for (index=0; index<r_jwks_size(jwks_pubkey); index++) {
@@ -581,17 +581,34 @@ static void get_jwks_out(json_t * j_arguments, int split_keys, int x5u_flags, in
 
 static int parse_token(const char * token, int indent, int x5u_flags, const char * str_jwks_pubkey, const char * str_jwks_privkey, const char * password, int show_header, int show_claims, int self_signed) {
   int ret = 0, type, res;
-  char * content, * str_value;
+  char * content, * str_value, * token_dup = NULL, * tmp = NULL;
   jwt_t * jwt = NULL;
   jwks_t * jwks_pubkey = NULL, * jwks_privkey = NULL;
   jwk_t * jwk_password;
   json_t * j_value;
 
   if (r_jwt_init(&jwt) == RHN_OK) {
+    tmp = str_replace(token, " ", "");
+    token_dup = tmp;
+    tmp = str_replace(token_dup, "\n", "");
+    o_free(token_dup);
+    token_dup = tmp;
+    tmp = str_replace(token_dup, "\t", "");
+    o_free(token_dup);
+    token_dup = tmp;
+    tmp = str_replace(token_dup, "\v", "");
+    o_free(token_dup);
+    token_dup = tmp;
+    tmp = str_replace(token_dup, "\f", "");
+    o_free(token_dup);
+    token_dup = tmp;
+    tmp = str_replace(token_dup, "\r", "");
+    o_free(token_dup);
+    token_dup = tmp;
     if (self_signed) {
-      res = r_jwt_advanced_parse(jwt, token, R_PARSE_HEADER_ALL, x5u_flags);
+      res = r_jwt_advanced_parse(jwt, token_dup, R_PARSE_HEADER_ALL, x5u_flags);
     } else {
-      res = r_jwt_advanced_parse(jwt, token, R_PARSE_NONE, x5u_flags);
+      res = r_jwt_advanced_parse(jwt, token_dup, R_PARSE_NONE, x5u_flags);
     }
     if (res == RHN_OK) {
       type = r_jwt_get_type(jwt);
@@ -682,7 +699,7 @@ static int parse_token(const char * token, int indent, int x5u_flags, const char
       }
       if (show_header) {
         j_value = r_jwt_get_full_header_json_t(jwt);
-        str_value = json_dumps(j_value, JSON_INDENT(indent)|JSON_SORT_KEYS);
+        str_value = json_dumps(j_value, (size_t)(JSON_INDENT(indent)|JSON_SORT_KEYS));
         printf("%s\n", str_value);
         o_free(str_value);
         json_decref(j_value);
@@ -691,7 +708,7 @@ static int parse_token(const char * token, int indent, int x5u_flags, const char
         str_value = NULL;
         j_value = r_jwt_get_full_claims_json_t(jwt);
         if (j_value != NULL) {
-          str_value = json_dumps(j_value, JSON_INDENT(indent)|JSON_SORT_KEYS);
+          str_value = json_dumps(j_value, (size_t)(JSON_INDENT(indent)|JSON_SORT_KEYS));
           printf("%s\n", str_value);
           o_free(str_value);
           json_decref(j_value);
@@ -708,6 +725,7 @@ static int parse_token(const char * token, int indent, int x5u_flags, const char
   r_jwt_free(jwt);
   r_jwks_free(jwks_pubkey);
   r_jwks_free(jwks_privkey);
+  o_free(token_dup);
   return ret;
 }
 
@@ -1003,7 +1021,7 @@ int main (int argc, char ** argv) {
         enc_alg = o_strdup(optarg);
         break;
       case 'n':
-        indent = strtol(optarg, NULL, 10);
+        indent = (int)strtol(optarg, NULL, 10);
         break;
       case 't':
         action = R_ACTION_PARSE_TOKEN;
