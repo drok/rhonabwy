@@ -1,0 +1,126 @@
+name: Functional Verification
+
+on:
+  push:
+    branches: [ "master", "dev-functional-verification" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gnutls: [gnutls_3_3_29, gnutls_3_4_17, gnutls_3_5_19, 3.6.16, 3.7.3, ]
+
+    steps:
+      - name: Cache gnutls libs
+        id: cache-gnutls
+        uses: actions/cache/restore@v3
+        env:
+          cache-name: gnutls-libs
+        with:
+          path: ~/installroot
+          key: ${{ runner.os }}-${{ env.cache-name }}-${{ matrix.gnutls }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.cache-name }}-
+
+      - name: Install dependencies
+        run: >
+
+          sudo apt-get -y install --no-install-recommends
+          build-essential
+          pkg-config
+          libjansson-dev
+          zlib1g-dev
+          libcurl4-gnutls-dev
+          libmicrohttpd-dev
+          check
+          gnutls-bin
+          liborcania-dev
+          libyder-dev
+          libulfius-dev
+
+      - if: ${{ steps.cache-gnutls.outputs.cache-hit != 'true' }}
+        name: Fetch gnutls source
+        uses: actions/checkout@v3
+        with:
+          repository: gnutls/gnutls
+          ref: ${{ matrix.gnutls }}
+          submodules: recursive
+
+      - if: ${{ steps.cache-gnutls.outputs.cache-hit != 'true' }}
+        name: Build gnutls
+        run: |
+          set -x
+          set
+          dpkg -l
+          export MAKEFLAGS="-j$(($(nproc) + 1))"
+          export PREFIX=$HOME/installroot/${{ matrix.gnutls }}
+          if [[ $HOSTTYPE == x86_64 ]] ; then
+            export DESTLIBDIR=$PREFIX/lib64
+          else
+            export DESTLIBDIR=$PREFIX/lib
+          fi
+          export PKG_CONFIG_PATH=$DESTLIBDIR/pkgconfig/
+          [ -d $PREFIX ] ||
+          {
+            case ${{ matrix.gnutls }} in
+              gnutls_3_3_*)  REQUIRED_NETTLE=3.4
+                ;;
+              gnutls_3_4_*)  REQUIRED_NETTLE=3.4
+                ;;
+              3.7.*) REQUIRED_NETTLE=3.8
+                ;;
+              *) REQUIRED_NETTLE=3.8
+                ;;
+            esac
+            # cd $HOME
+            if ! cd nettle-$REQUIRED_NETTLE ; then
+              curl -s https://ftp.gnu.org/gnu/nettle/nettle-$REQUIRED_NETTLE.tar.gz | tar xz
+              cd nettle-$REQUIRED_NETTLE
+            fi
+            ./configure --prefix=$PREFIX && make install
+            cd ..
+            sudo apt-get -y install --no-install-recommends autopoint gnulib gtk-doc-tools gperf libunistring-dev \
+              libev4 libev-dev unbound-anchor libtasn1-bin libtasn1-6-dev libidn2-0-dev gawk gettext autogen \
+              libopts25-dev libtspi-dev
+            if [ -x ./bootstrap ] ; then
+              ./bootstrap
+            else
+              autoupdate
+              make
+            fi
+            mkdir -p $PREFIX
+            unbound-anchor -v -a "$PREFIX/root.key" || :
+            # disable rpath because broken on ubuntu (or github "universal" image),
+            # looks for libs in /usr/lib instead of /usr/lib64
+            mkdir -p ${{ matrix.gnutls }}
+            # git checkout ${{ matrix.gnutls }}
+            cd ${{ matrix.gnutls }}
+            ../configure --prefix=$PREFIX --disable-doc \
+              --disable-dependency-tracking \
+              --disable-libdane \
+              --disable-crywrap \
+              --with-included-libtasn1 \
+              --with-nettle-mini \
+              --without-tpm \
+              --with-unbound-root-key-file=$PREFIX/root.key \
+              --with-default-trust-store-file=/etc/ssl/certs/ca-certificates.crt
+            make install LDFLAGS="-Wl,-rpath -Wl,$DESTLIBDIR"
+          }
+
+      - if: ${{ steps.cache-gnutls.outputs.cache-hit != 'true' }}
+        name: Save GnuTLS lib cache
+        id: cache-gnutls-save
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            ~/installroot
+          key: ${{ steps.cache-gnutls.outputs.cache-primary-key }}
+
+      - uses: actions/checkout@v3
+
+      - name: Run check
+        run: make check
